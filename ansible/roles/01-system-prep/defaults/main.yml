@@ -8,42 +8,34 @@ zfsprep_hostname:
   short: zfsprep
   long: zfsprep.dyindude.local
 zfsprep_root_pool: rpool
-zfsprep_data_pool: bulk
 zfsprep_root_pool_type: ""
-zfsprep_data_pool_type: ""
 zfsprep_legacy_device_nodes: false
-zfsprep_target_disks: "{{ zfsprep_legacy_device_nodes | ternary(((zfsprep_root_disks + zfsprep_data_disks) | map('regex_replace', '(.*)', '/dev/\\g<1>') | list),(zfsprep_root_disks_by_id + zfsprep_data_disks_by_id)) }}"
+zfsprep_target_disks: "{{ zfsprep_legacy_device_nodes | ternary(((zfsprep_root_disks) | map('regex_replace', '(.*)', '/dev/\\g<1>') | list),(zfsprep_root_disks_by_id)) }}"
 zfsprep_root_disks:
   - sda
   - sdb
-zfsprep_data_disks: []
 zfsprep_root_disks_by_id: "{{ zfsprep_root_disks | map('extract', hostvars[inventory_hostname]['ansible_devices'], ['links', 'ids', 0]) | list | map('regex_replace', '(.*)', '/dev/disk/by-id/\\g<1>') | list }}"
-zfsprep_data_disks_by_id: "{{ zfsprep_data_disks | map('extract', hostvars[inventory_hostname]['ansible_devices'], ['links', 'ids', 0]) | list | map('regex_replace', '(.*)', '/dev/disk/by-id/\\g<1>') | list }}"
 zfsprep_root_device_list: "{{ zfsprep_legacy_device_nodes | ternary((zfsprep_root_disks | map('regex_replace', '(.*)', '/dev/\\g<1>') | list), zfsprep_root_disks_by_id) }}"
-zfsprep_data_device_list: "{{ zfsprep_legacy_device_nodes | ternary((zfsprep_data_disks | map('regex_replace', '(.*)', '/dev/\\g<1>') | list), zfsprep_data_disks_by_id) }}"
-zfsprep_data_partitions: false
+#zfsprep_data_partitions: false
 zfsprep_root_part_append: "{{ zfsprep_legacy_device_nodes | ternary('1', '-part1') }}"
-zfsprep_data_part_append: "{{ zfsprep_legacy_device_nodes | ternary('1', '-part1') }}"
+#zfsprep_data_part_append: "{{ zfsprep_legacy_device_nodes | ternary('1', '-part1') }}"
 zfsprep_boot_part_append: "{{ zfsprep_legacy_device_nodes | ternary('3', '-part3') }}"
-zfsprep_crypt_part_append: "{{ zfsprep_legacy_device_nodes | ternary('4', '-part4') }}"
+#zfsprep_crypt_part_append: "{{ zfsprep_legacy_device_nodes | ternary('4', '-part4') }}"
 
 zfsprep_mbr_partition_flags: "-a1 -n2:34:2047  -t2:EF02"
 zfsprep_efi_partition_flags: "    -n3:1M:+512M -t3:EF00"
 zfsprep_root_partition_flags: "-n1:0:0         -t1:BF01"
-zfsprep_cryptboot_partition_flags: "-n4:0:+512M  -t4:8300"
-zfsprep_cryptroot_partition_flags: "-n1:0:0      -t1:8300"
-zfsprep_partition_flags: "{{ (zfsprep_efi | default(false) | bool | ternary(zfsprep_efi_partition_flags,zfsprep_mbr_partition_flags)) + ' ' + (zfsprep_luks | default(false) | bool | ternary(zfsprep_cryptboot_partition_flags + ' ' + zfsprep_cryptroot_partition_flags,zfsprep_root_partition_flags)) }}"
+#zfsprep_cryptboot_partition_flags: "-n4:0:+512M  -t4:8300"
+#zfsprep_cryptroot_partition_flags: "-n1:0:0      -t1:8300"
+zfsprep_partition_flags: "{{ (zfsprep_efi | default(false) | bool | ternary(zfsprep_efi_partition_flags,zfsprep_mbr_partition_flags)) }}"
 #a8 for 4k size
-zfsprep_data_partition_flags: "-a8 -n1:0:0 {{ (zfsprep_luks | default(false) | bool | ternary('-t1:8300', '-t1:BF01')) }}"
-zfsprep_luks: false
-zfsprep_luks_flags: "-c aes-xts-plain64 -s 256 -h sha256"
-zfsprep_luks_root_names:
+#zfsprep_data_partition_flags: "-a8 -n1:0:0 {{ (zfsprep_luks | default(false) | bool | ternary('-t1:8300', '-t1:BF01')) }}"
+#zfsprep_luks: false
+#zfsprep_luks_flags: "-c aes-xts-plain64 -s 256 -h sha256"
+#zfsprep_luks_root_names:
   - e0
   - e1
-zfsprep_luks_data_names:
-  - e2
-  - e3
-zfsprep_luks_passphrase: "secret"
+#zfsprep_luks_passphrase: "secret"
 zfsprep_root_pool_opts:
   - "-o ashift=12"
   - "-O atime=off"
@@ -51,13 +43,6 @@ zfsprep_root_pool_opts:
   - "-O compression=lz4"
   - "-O normalization=formD"
   - "-O xattr=sa -O mountpoint=/ -R /mnt"
-zfsprep_data_pool_opts:
-  - "-o ashift=12"
-  - "-O atime=off"
-  - "-O canmount=off"
-  - "-O compression=lz4"
-  - "-O normalization=formD"
-  - "-O xattr=sa -O mountpoint=/data -R /mnt"
 zfsprep_root_volumes:
   - name: "{{ zfsprep_root_pool }}/home"
     properties:
