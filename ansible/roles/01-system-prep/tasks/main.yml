@@ -1,13 +1,8 @@
 ---
 - name: ensure live system has necessary packages installed
   apt:
-    name: "{{ item }}"
+    name: ['mdadm','debootstrap','gdisk','zfs-initramfs']
     state: present
-  with_items:
-    - mdadm
-    - debootstrap
-    - gdisk
-    - zfs-initramfs
 - name: clear superblocks
   command: "mdadm --zero-superblock --force {{ item }}"
   with_items:
