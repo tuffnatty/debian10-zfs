@@ -18,7 +18,7 @@
   with_items:
     - "{{ zfsprep_root_device_list }}"
 - name: create root zpool
-  shell: "zpool create {{ zfsprep_root_pool_opts | join(' ') }} {{ zfsprep_root_pool }} {{ zfsprep_root_pool_type }} {{ (zfsprep_luks | default(false) | bool == true) | ternary(zfsprep_luks_root_names | map('regex_replace', '(.*)', '/dev/mapper/\\g<1>') | list, zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_root_part_append) | list) | join(' ') }}"
+  shell: "zpool create {{ zfsprep_root_pool_opts | join(' ') }} {{ zfsprep_root_pool }} {{ zfsprep_root_pool_type }} {{ zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_root_part_append) | list | join(' ') }}"
 - name: create root dataset
   zfs:
     name: "{{ zfsprep_root_pool }}/ROOT"
