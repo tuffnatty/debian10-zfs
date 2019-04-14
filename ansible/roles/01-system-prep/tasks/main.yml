@@ -8,17 +8,22 @@
     - debootstrap
     - gdisk
     - zfs-initramfs
-- name: forcibly zap disks
-  shell: "mdadm --zero-superblock --force {{ item }} && sgdisk --zap-all {{ item }}"
+- name: clear superblocks
+  command: "mdadm --zero-superblock --force {{ item }}"
+  with_items:
+    - "{{ zfsprep_target_disks }}"
+  when: zfsprep_zap_disks | default(false) | bool == true
+- name: clear gpt tables
+  command: "sgdisk --zap-all {{ item }}"
   with_items:
     - "{{ zfsprep_target_disks }}"
   when: zfsprep_zap_disks | default(false) | bool == true
 - name: set up root disk partitions
-  shell: "sgdisk {{ zfsprep_partition_flags }} {{ item }}"
+  command: "sgdisk {{ zfsprep_partition_flags }} {{ item }}"
   with_items:
     - "{{ zfsprep_root_device_list }}"
 - name: create root zpool
-  shell: "zpool create {{ zfsprep_root_pool_opts | join(' ') }} {{ zfsprep_root_pool }} {{ zfsprep_root_pool_type }} {{ zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_root_part_append) | list | join(' ') }}"
+  command: "zpool create {{ zfsprep_root_pool_opts | join(' ') }} {{ zfsprep_root_pool }} {{ zfsprep_root_pool_type }} {{ zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_root_part_append) | list | join(' ') }}"
 - name: create root dataset
   zfs:
     name: "{{ zfsprep_root_pool }}/ROOT"
@@ -34,7 +39,7 @@
       canmount: noauto
       mountpoint: /
 - name: manually mount rpool/ROOT/ubuntu before creating other mountpoints
-  shell: "zfs mount {{ zfsprep_root_pool }}/ROOT/ubuntu"
+  command: "zfs mount {{ zfsprep_root_pool }}/ROOT/ubuntu"
 - name: create mountpoints in root pool
   zfs:
     name: "{{ item.name }}"
@@ -47,8 +52,10 @@
   file:
     path: /mnt/var/tmp
     mode: 01777
-- name: run debootstrap and set devices=off for root pool
-  shell: "debootstrap {{ zfsprep_ubuntu_release }} /mnt && zfs set devices=off {{ zfsprep_root_pool }}"
+- name: run debootstrap
+  command: "debootstrap {{ zfsprep_ubuntu_release }} /mnt"
+- name: run zfs set devices=off for root pool
+  command: "zfs set devices=off {{ zfsprep_root_pool }}"
 - name: write /etc/hostname in chroot
   copy:
     content: "{{ zfsprep_hostname.short }}"
@@ -68,7 +75,7 @@
     state: present
     insertbefore: BOF
 - name: mount special filesystems for chroot
-  shell: "mount --rbind {{ item }}"
+  command: "mount --rbind {{ item }}"
   with_items:
     - /dev /mnt/dev
     - /proc /mnt/proc
