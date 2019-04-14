@@ -1,16 +1,29 @@
 - hosts: live
-  vars_files:
-    - vars.yml
+#  vars_files:
+#    - vars.yml
+  vars:
+    zfsprep_zap_disks: true
+    zfsprep_root_pool: "{{ zfsprep_hostname.long }}"
+    zfsprep_efi: true
+    zfsprep_hostname:
+      short: arc
+      long: arc.subly.me
+    zfsprep_root_disks:
+      - sdb
+      - sdc
+    zfsprep_root_pool_type: "mirror"
+    zfsprep_legacy_device_nodes: false
+    zfsprep_timezone: "America/Detroit"
   roles:
     - role: 01-system-prep
-- hosts: chroot
-  gather_facts: no
-  tasks:
-    - name: make sure python is installed in our chroot
-      raw: "apt-get update && apt-get -y install python"
-- hosts: chroot
-  vars_files:
-    - vars.yml
-  roles:
-    - role: 02-chroot
-    - role: 03-post-setup
+#- hosts: chroot
+#  gather_facts: no
+#  tasks:
+#    - name: make sure python is installed in our chroot
+#      raw: "apt-get update && apt-get -y install python"
+#- hosts: chroot
+#  vars_files:
+#    - vars.yml
+#  roles:
+#    - role: 02-chroot
+#    - role: 03-post-setup
