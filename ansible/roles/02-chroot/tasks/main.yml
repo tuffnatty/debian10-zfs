@@ -13,7 +13,10 @@
     path: /etc/default/locale
     insertafter: EOF
 - name: set timezone
-  shell: "echo {{ zfsprep_timezone }} > /etc/timezone && rm /etc/localtime && dpkg-reconfigure -f noninteractive tzdata"
+  timezone:
+    name: "{{ zfsprep_timezone }}"
+- name: reconfigure tzdata package
+  command: dpkg-reconfigure -f noninteractive tzdata
 - name: ln -s /proc/self/mounts /etc/mtab
   file:
     src: /proc/self/mounts
@@ -36,12 +39,13 @@
     name: grub-pc
     state: present
   when: zfsprep_efi|default(false)|bool != true
-- apt:
+- name: install dosfstools
+  apt:
     name: dosfstools
     state: present
   when: zfsprep_efi|default(false)|bool == true
 - name: set up grub partitions for efi
-  shell: "mkdosfs -F32 -n EFI {{ item }}"
+  command: "mkdosfs -F32 -n EFI {{ item }}"
   with_items:
     - "{{ zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_boot_part_append) | list  }}"
   when: zfsprep_efi|default(false)|bool == true
@@ -68,7 +72,7 @@
     name: root
     password: "{{ zfsprep_root_password_hash }}"
 - name: fix mount race condition
-  shell: "zfs set mountpoint=legacy {{ item }}"
+  command: "zfs set mountpoint=legacy {{ item }}"
   with_items:
     - "{{ zfsprep_root_pool }}/var/log"
     - "{{ zfsprep_root_pool }}/var/tmp"
@@ -95,7 +99,8 @@
     create: yes
     state: present
   when: zfsprep_swap|default(false)|bool == true
-- shell: "update-initramfs -c -k all"
+- name: update initramfs
+  command: "update-initramfs -c -k all"
 - name: modify /etc/default/grub
   replace:
     path: /etc/default/grub
@@ -110,8 +115,10 @@
       replace: 'GRUB_CMDLINE_LINUX="{{ zfsprep_grub_cmdline }}"'
     - regex: "^#(GRUB_TERMINAL.*)"
       replace: "\\1"
-- shell: update-grub
-- shell: "grub-install {{ item }}"
+- name: update grub
+  command: update-grub
+- name: grub install
+  command: "grub-install {{ item }}"
   with_items:
     - "{{ zfsprep_root_device_list }}"
   when: zfsprep_efi|default(false)|bool != true
