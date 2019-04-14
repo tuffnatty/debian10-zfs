@@ -33,8 +33,8 @@ zfsprep_partition_flags: "{{ (zfsprep_efi | default(false) | bool | ternary(zfsp
 #zfsprep_luks: false
 #zfsprep_luks_flags: "-c aes-xts-plain64 -s 256 -h sha256"
 #zfsprep_luks_root_names:
-  - e0
-  - e1
+#  - e0
+#  - e1
 #zfsprep_luks_passphrase: "secret"
 zfsprep_root_pool_opts:
   - "-o ashift=12"
