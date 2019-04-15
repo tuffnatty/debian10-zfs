@@ -142,7 +142,7 @@
     - "{{ (zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_boot_part_append) | list)[1:] }}"
   when: (zfsprep_efi|default(false)|bool == true) and (zfsprep_root_device_list | length > 1)
 - name: setup efi on secondary disks
-  command: "efibootmgr -c -g -d {{ item.1 }} -p 3 -L 'ubuntu-{{ item.2 }}' -l '\\EFI\\Ubuntu\\grubx64.efi'"
+  command: "efibootmgr -c -g -d {{ item.0 }} -p 3 -L 'ubuntu-{{ item.1 }}' -l '\\EFI\\Ubuntu\\grubx64.efi'"
   with_together:
     - "{{ (zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>') | list)[1:] }}"
     - "{{ zfsprep_root_disks[1:] }}"
