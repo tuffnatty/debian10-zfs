@@ -91,7 +91,18 @@
     extra_zfs_properties:
       "{{ zfsprep_swap_opts }}"
 - name: mkswap
-  shell: "mkswap -f /dev/zvol/{{ zfsprep_root_pool }}/swap && echo /dev/zvol/{{ zfsprep_root_pool }}/swap none swap defaults 0 0 >> /etc/fstab && swapon -av"
+  command: "mkswap -f /dev/zvol/{{ zfsprep_root_pool }}/swap"
+  when: zfsprep_swap|default(false)|bool == true
+- name: write swap entry in fstab
+  mount:
+    backup: yes
+    path: none
+    src: /dev/zvol/{{ zfsprep_root_pool }}/swap
+    fstype: swap
+    opts: defaults
+    passno: 0
+    dump: 0
+    state: mounted
   when: zfsprep_swap|default(false)|bool == true
 - lineinfile:
     line: "RESUME=none"
@@ -123,12 +134,16 @@
     - "{{ zfsprep_root_device_list }}"
   when: zfsprep_efi|default(false)|bool != true
 - name: install grub efi on primary disk
-  shell: "grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ubuntu --recheck --no-floppy"
+  command: "grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ubuntu --recheck --no-floppy"
   when: zfsprep_efi|default(false)|bool == true
-- name: write grub boot sector/setup efi on secondary disks
-  shell: "dd if={{ zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_boot_part_append) | list | first }} of={{ item.0 }} && efibootmgr -c -g -d {{ item.1 }} -p 3 -L 'ubuntu-{{ item.2 }}' -l '\\EFI\\Ubuntu\\grubx64.efi'"
+- name: write grub boot sector
+  command: "dd if={{ zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_boot_part_append) | list | first }} of={{ item.0 }}"
   with_together:
     - "{{ (zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_boot_part_append) | list)[1:] }}"
+  when: (zfsprep_efi|default(false)|bool == true) and (zfsprep_root_device_list | length > 1)
+- name: setup efi on secondary disks
+  command: "efibootmgr -c -g -d {{ item.1 }} -p 3 -L 'ubuntu-{{ item.2 }}' -l '\\EFI\\Ubuntu\\grubx64.efi'"
+  with_together:
     - "{{ (zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>') | list)[1:] }}"
     - "{{ zfsprep_root_disks[1:] }}"
   when: (zfsprep_efi|default(false)|bool == true) and (zfsprep_root_device_list | length > 1)
