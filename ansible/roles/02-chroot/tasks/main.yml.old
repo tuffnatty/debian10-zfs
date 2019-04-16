@@ -1,73 +1,59 @@
-
 ---
 - debug:
     var: zfsprep_efi|default(false)|bool == true
-
 - name: install locales
   locale_gen:
     name: "{{ item }}"
     state: present
   with_items:
     - "{{ zfsprep_locales }}"
-
 - name: set LANG in /etc/default/locale
   lineinfile:
     line: "LANG={{ zfsprep_lang }}"
     path: /etc/default/locale
     insertafter: EOF
-
 - name: set timezone
   timezone:
     name: "{{ zfsprep_timezone }}"
-
 - name: reconfigure tzdata package
   command: dpkg-reconfigure -f noninteractive tzdata
-
 - name: ln -s /proc/self/mounts /etc/mtab
   file:
     src: /proc/self/mounts
     dest: /etc/mtab
     state: link
-
 - name: update apt cache
   apt:
     update_cache: yes
-
 - name: install our kernel
   apt:
     name: "{{ zfsprep_kernel_package }}"
     install_recommends: no
     state: present
-
 - name: install zfs-initramfs
   apt:
     name: zfs-initramfs
     state: present
-
 - name: install grub-pc
   apt:
     name: grub-pc
     state: present
   when: zfsprep_efi|default(false)|bool != true
-
 - name: install dosfstools
   apt:
     name: dosfstools
     state: present
   when: zfsprep_efi|default(false)|bool == true
-
 - name: set up grub partitions for efi
   command: "mkdosfs -F32 -n EFI {{ item }}"
   with_items:
     - "{{ zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_boot_part_append) | list  }}"
   when: zfsprep_efi|default(false)|bool == true
-
 - name: create efi mountpoint
   file:
     path: /boot/efi
     state: directory
   when: zfsprep_efi|default(false)|bool == true
-
 - name: get efi partition uuid
   command: "blkid -s PARTUUID -o value {{ item }}"
   register: efi_blkid
@@ -109,18 +95,15 @@
     name: grub-efi-amd64
     state: present
   when: zfsprep_efi|default(false)|bool == true
-
 - name: set root password
   user:
     name: root
     password: "{{ zfsprep_root_password_hash }}"
-
 - name: fix mount race condition
   command: "zfs set mountpoint=legacy {{ item }}"
   with_items:
     - "{{ zfsprep_root_pool }}/var/log"
     - "{{ zfsprep_root_pool }}/var/tmp"
-
 - name: update fstab
   lineinfile:
     line: "{{ zfsprep_root_pool}}{{ item }} {{ item }} zfs defaults 0 0"
@@ -129,18 +112,15 @@
   with_items:
     - /var/log
     - /var/tmp
-
 - name: create swap zvol
   zfs:
     name: "{{ zfsprep_root_pool }}/swap "
     state: present
     extra_zfs_properties:
       "{{ zfsprep_swap_opts }}"
-
 - name: mkswap
   command: "mkswap -f /dev/zvol/{{ zfsprep_root_pool }}/swap"
   when: zfsprep_swap|default(false)|bool == true
-
 - name: write swap entry in fstab
   mount:
     backup: yes
@@ -152,17 +132,14 @@
     dump: 0
     state: mounted
   when: zfsprep_swap|default(false)|bool == true
-
 - lineinfile:
     line: "RESUME=none"
     path: /etc/initramfs-tools/conf.d/resume
     create: yes
     state: present
   when: zfsprep_swap|default(false)|bool == true
-
 - name: update initramfs
   command: "update-initramfs -c -k all"
-
 - name: modify /etc/default/grub
   replace:
     path: /etc/default/grub
@@ -177,54 +154,44 @@
       replace: 'GRUB_CMDLINE_LINUX="{{ zfsprep_grub_cmdline }}"'
     - regex: "^#(GRUB_TERMINAL.*)"
       replace: "\\1"
-
 - name: update grub
   command: update-grub
-
 - name: grub install
   command: "grub-install {{ item }}"
   with_items:
     - "{{ zfsprep_root_device_list }}"
   when: zfsprep_efi|default(false)|bool != true
-
 - name: install grub efi on primary disk
   command: "grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ubuntu --recheck --no-floppy"
   when: zfsprep_efi|default(false)|bool == true
-
 - name: write grub boot sector
   command: "dd if={{ zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_boot_part_append) | list | first }} of={{ item }}"
   with_items:
     - "{{ (zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_boot_part_append) | list)[1:] }}"
   when: (zfsprep_efi|default(false)|bool == true) and (zfsprep_root_device_list | length > 1)
-
 - name: setup efi on secondary disks
   command: "efibootmgr -c -g -d {{ item.0 }} -p 3 -L 'ubuntu-{{ item.1 }}' -l '\\EFI\\Ubuntu\\grubx64.efi'"
   with_together:
     - "{{ (zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>') | list)[1:] }}"
     - "{{ zfsprep_root_disks[1:] }}"
   when: (zfsprep_efi|default(false)|bool == true) and (zfsprep_root_device_list | length > 1)
-
 - name: ensure zfs.target starts on boot
   systemd:
     name: zfs.target
     enabled: yes
-
 - name: install firstboot service
   template:
     src: firstboot.service.j2
     dest: /lib/systemd/system/firstboot.service
-
 - name: install firstboot script
   template:
     src: firstboot.j2
     dest: /opt/firstboot
     mode: 0777
-
 - name: enable firstboot service
   systemd:
     name: firstboot.service
     enabled: yes
-
 - name: enable systemd-networkd service
   systemd:
     name: systemd-networkd
