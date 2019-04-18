@@ -68,11 +68,14 @@
   when: zfsprep_efi|default(false)|bool == true
 
 - name: get efi partition uuid
-  command: "blkid -s PARTUUID -o value {{ item }}"
+  command: "blkid -s PARTUUID -o value {{ disk }}"
   register: efi_blkid
-  with_items:
-    - "{{ zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_boot_part_append) | list | first }}"
+  vars:
+    disk: "{{ zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_boot_part_append) | list | first }}"
   when: zfsprep_efi|default(false)|bool == true
+
+- debug:
+    msg: "{{ efi_blkid }}"
 
 - name: update fstab with efi partition
   mount:
@@ -86,11 +89,14 @@
   when: zfsprep_efi|default(false)|bool == true
 
 - name: get backup efi partition uuid
-  command: "blkid -s PARTUUID -o value {{ item }}"
+  command: "blkid -s PARTUUID -o value {{ disk }}"
   register: efi_backup_blkid
-  with_items:
-    - "{{ (zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_boot_part_append) | list)[1:] }}"
+  vars:
+    disk: "{{ (zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_boot_part_append) | list)[1:] }}"
   when: zfsprep_efi|default(false)|bool == true
+
+- debug:
+    msg: "{{ efi_backup_blkid }}"
 
 - name: update fstab with backup efi partitions
   mount:
