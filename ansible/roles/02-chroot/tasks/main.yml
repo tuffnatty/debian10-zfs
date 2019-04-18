@@ -89,25 +89,26 @@
   when: zfsprep_efi|default(false)|bool == true
 
 - name: get backup efi partition uuid
-  command: "blkid -s PARTUUID -o value {{ disk }}"
+  command: "blkid -s PARTUUID -o value {{ item }}"
   register: efi_backup_blkid
-  vars:
-    disk: "{{ (zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_boot_part_append) | list)[1:] }}"
+  with_items:
+    - "{{ (zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_boot_part_append) | list)[1:] }}"
   when: zfsprep_efi|default(false)|bool == true
 
 - debug:
-    msg: "{{ efi_backup_blkid }}"
+    msg: "{{ efi_backup_blkid.results }}"
 
 - name: update fstab with backup efi partitions
   mount:
     path: /boot/efi
-    src: PARTUUID={{ efi_backup_blkid.stdout }}
+    src: PARTUUID={{ item.stdout }}
     fstype: vfat
     opts: noauto,nofail,x-systemd.device-timeout=1
     dump: 0
     passno: 1
     state: present
   when: zfsprep_efi|default(false)|bool == true
+  loop: "{{ efi_backup_blkid.results }}"
 
 - name: install grub-efi-amd64
   apt:
