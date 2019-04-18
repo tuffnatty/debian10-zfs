@@ -1,4 +1,3 @@
-
 ---
 - name: ensure live system has necessary packages installed
   apt:

@@ -1,4 +1,3 @@
-
 ---
 - debug:
     var: zfsprep_efi|default(false)|bool == true
