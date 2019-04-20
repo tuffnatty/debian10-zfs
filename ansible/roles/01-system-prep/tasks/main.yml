@@ -27,7 +27,7 @@
 - name: create root zpool
   command: "zpool create {{ zfsprep_root_pool_opts }} {{ zfsprep_root_pool }} {{ zfsprep_root_pool_type }} {{ zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_root_part_append) | list | join(' ') }}"
 
-- name: create root dataset
+- name: create boot dataset
   zfs:
     name: "{{ zfsprep_boot_pool }}/BOOT"
     state: present
@@ -60,7 +60,7 @@
       mountpoint: /
 
 - name: manually mount bpool/ROOT/ubuntu before creating other mountpoints
-  command: "zfs mount {{ zfsprep_boot_pool }}/ROOT/ubuntu"
+  command: "zfs mount {{ zfsprep_boot_pool }}/BOOT/ubuntu"
 
 - name: manually mount rpool/ROOT/ubuntu before creating other mountpoints
   command: "zfs mount {{ zfsprep_root_pool }}/ROOT/ubuntu"
