@@ -156,7 +156,11 @@
     opts: defaults
     passno: 0
     dump: 0
-    state: mounted
+    state: present
+  when: zfsprep_swap|default(false)|bool == true
+
+- name: swapon
+  command: swapon -av
   when: zfsprep_swap|default(false)|bool == true
 
 - lineinfile:
