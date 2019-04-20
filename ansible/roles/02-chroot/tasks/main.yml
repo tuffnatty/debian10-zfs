@@ -124,7 +124,9 @@
 - name: fix mount race condition
   command: "zfs set mountpoint=legacy {{ item }}"
   with_items:
+    - "{{ zfsprep_root_pool }}/tmp"
     - "{{ zfsprep_root_pool }}/var/log"
+    - "{{ zfsprep_root_pool }}/var/spool"
     - "{{ zfsprep_root_pool }}/var/tmp"
 
 - name: update fstab
@@ -133,7 +135,9 @@
     path: /etc/fstab
     insertafter: EOF
   with_items:
+    - /tmp
     - /var/log
+    - /var/spool
     - /var/tmp
 
 - name: create swap zvol

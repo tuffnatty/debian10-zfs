@@ -6,7 +6,9 @@ zfsprep_netplan: true
 zfsprep_netplan_interface: "{{ (hostvars[inventory_hostname]['ansible_interfaces'] | difference(['lo'])).0 }}"
 zfsprep_hostname:
   short: zfsprep
-  long: zfsprep.dyindude.local
+  long: zfsprep.local
+zfsprep_boot_pool: bpool
+zfsprep_boot_pool_type: ""
 zfsprep_root_pool: rpool
 zfsprep_root_pool_type: ""
 zfsprep_legacy_device_nodes: false
@@ -16,15 +18,41 @@ zfsprep_root_disks:
   - sdb
 zfsprep_root_disks_by_id: "{{ zfsprep_root_disks | map('extract', hostvars[inventory_hostname]['ansible_devices'], ['links', 'ids', 0]) | list | map('regex_replace', '(.*)', '/dev/disk/by-id/\\g<1>') | list }}"
 zfsprep_root_device_list: "{{ zfsprep_legacy_device_nodes | ternary((zfsprep_root_disks | map('regex_replace', '(.*)', '/dev/\\g<1>') | list), zfsprep_root_disks_by_id) }}"
-zfsprep_root_part_append: "{{ zfsprep_legacy_device_nodes | ternary('2', '-part2') }}"
-zfsprep_boot_part_append: "{{ zfsprep_legacy_device_nodes | ternary('1', '-part1') }}"
+zfsprep_efi_part_append: "{{ zfsprep_legacy_device_nodes | ternary('1', '-part1') }}"
+zfsprep_boot_part_append: "{{ zfsprep_legacy_device_nodes | ternary('2', '-part2') }}"
+zfsprep_root_part_append: "{{ zfsprep_legacy_device_nodes | ternary('3', '-part3') }}"
 
 zfsprep_mbr_partition_flags: "-a1 -n2:34:2047 -t2:EF02"
 zfsprep_efi_partition_flags: "-n1:1M:+512M -t1:EF00"
-zfsprep_root_partition_flags: "-n2:0:0 -t2:BF01"
-zfsprep_partition_flags: "{{ (zfsprep_efi | default(false) | bool | ternary(zfsprep_efi_partition_flags,zfsprep_mbr_partition_flags)) + ' ' + zfsprep_root_partition_flags }}"
+zfsprep_boot_partition_flags: "-n2:0:+512M -t3:BF01"
+zfsprep_root_partition_flags: "-n3:0:0 -t2:BF01"
+zfsprep_partition_flags: "{{ (zfsprep_efi | default(false) | bool | ternary(zfsprep_efi_partition_flags,zfsprep_mbr_partition_flags)) + ' ' + zfsprep_boot_partition_flags + ' ' + zfsprep_root_partition_flags}}"
 #a8 for 4k size
 zfsprep_root_pool_opts: "-o ashift=12 -O atime=off -O canmount=off -O compression=lz4 -O normalization=formD -O xattr=sa -O mountpoint=/ -R /mnt"
+zfsprep_boot_pool_opts:
+  - "-o ashift=12"
+  - "-d"
+  - "-o feature@async_destroy=enabled"
+  - "-o feature@bookmarks=enabled"
+  - "-o feature@embedded_data=enabled"
+  - "-o feature@empty_bpobj=enabled"
+  - "-o feature@enabled_txg=enabled"
+  - "-o feature@extensible_dataset=enabled"
+  - "-o feature@filesystem_limits=enabled"
+  - "-o feature@hole_birth=enabled"
+  - "-o feature@large_blocks=enabled"
+  - "-o feature@lz4_compress=enabled"
+  - "-o feature@spacemap_histogram=enabled"
+  - "-o feature@userobj_accounting=enabled"
+  - "-O acltype=posixacl"
+  - "-O canmount=off"
+  - "-O compression=lz4"
+  - "-O devices=off"
+  - "-O normalization=formD"
+  - "-O relatime=on"
+  - "-O xattr=sa"
+  - "-O mountpoint=/"
+  - "-R /mnt"
 zfsprep_root_volumes:
   - name: "{{ zfsprep_root_pool }}/home"
     properties:
@@ -32,6 +60,9 @@ zfsprep_root_volumes:
   - name: "{{ zfsprep_root_pool }}/home/root"
     properties:
       mountpoint: /root
+  - name: "{{ zfsprep_root_pool }}/tmp"
+    properties:
+      mountpoint: /tmp
   - name: "{{ zfsprep_root_pool }}/var"
     properties:
       canmount: off
