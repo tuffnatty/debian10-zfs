@@ -85,6 +85,7 @@
     state: directory
   with_items:
     - /tmp
+    - /var
     - /var/log
     - /var/spool
     - /var/tmp
