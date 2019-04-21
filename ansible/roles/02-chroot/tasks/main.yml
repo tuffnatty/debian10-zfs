@@ -250,9 +250,7 @@
   when: (zfsprep_efi|default(false)|bool == true) and (zfsprep_root_device_list | length > 1)
 
 - name: mount boot efi partition
-  mount:
-    path: /boot/efi
-    state: mounted
+  command: mount /boot/efi
 
 - name: ensure zfs.target starts on boot
   systemd:
