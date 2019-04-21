@@ -43,7 +43,7 @@
       canmount: off
       mountpoint: none
 
-- name: create boot fs
+- name: create boot filesystem
   zfs:
     name: "{{ zfsprep_boot_pool }}/BOOT/ubuntu"
     state: present
@@ -51,7 +51,7 @@
       canmount: noauto
       mountpoint: /boot
 
-- name: create root fs
+- name: create root filesystem
   zfs:
     name: "{{ zfsprep_root_pool }}/ROOT/ubuntu"
     state: present
