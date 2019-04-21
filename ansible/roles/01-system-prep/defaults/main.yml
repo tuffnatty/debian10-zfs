@@ -39,6 +39,7 @@ zfsprep_root_volumes:
       mountpoint: /root
   - name: "{{ zfsprep_root_pool }}/tmp"
     properties:
+      mountpoint: legacy
       com.sun:auto-snapshot: false
   - name: "{{ zfsprep_root_pool }}/var"
     properties:
@@ -50,11 +51,14 @@ zfsprep_root_volumes:
       com.sun:auto-snapshot: false
   - name: "{{ zfsprep_root_pool }}/var/log"
     properties:
+      mountpoint: legacy
       acltype: posixacl
       xattr: sa
   - name: "{{ zfsprep_root_pool }}/var/spool"
-    properties: {}
+    properties:
+      mountpoint: legacy
   - name: "{{ zfsprep_root_pool }}/var/tmp"
     properties:
+      mountpoint: legacy
       com.sun:auto-snapshot: false
       exec: on

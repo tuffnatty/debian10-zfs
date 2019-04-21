@@ -49,7 +49,7 @@
     state: present
     extra_zfs_properties:
       canmount: noauto
-      mountpoint: /boot
+      mountpoint: legacy
 
 - name: create root filesystem
   zfs:
@@ -63,7 +63,7 @@
   command: "zfs mount {{ zfsprep_root_pool }}/ROOT/ubuntu"
 
 - name: manually mount bpool/ROOT/ubuntu before creating other mountpoints
-  command: "zfs mount {{ zfsprep_boot_pool }}/BOOT/ubuntu"
+  command: "mount -t zfs {{ zfsprep_boot_pool }}/BOOT/ubuntu /mnt/boot"
 
 - name: create mountpoints in root pool
   zfs:
@@ -73,6 +73,14 @@
       "{{ item.properties }}"
   with_items:
     - "{{ zfsprep_root_volumes }}"
+
+- name: mount rpool filesystems with legacy mountpoints
+  command: "mount -t zfs {{ zfsprep_root_pool }}{{ item }} {{ item }}"
+  with_items:
+    - /tmp
+    - /var/log
+    - /var/spool
+    - /var/tmp
 
 - name: chmod 01777 /mnt/var/tmp
   file:

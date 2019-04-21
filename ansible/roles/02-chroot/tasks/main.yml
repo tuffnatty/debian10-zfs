@@ -2,6 +2,31 @@
 - debug:
     var: zfsprep_efi|default(false)|bool == true
 
+- name: update fstab entry for boot volume
+  mount:
+    path: /boot
+    src: "{{ zfsprep_boot_pool}}/BOOT/ubuntu"
+    fstype: zfs
+    opts: nodev,relatime,x-systemd.requires=zfs-import-bpool.service
+    dump: 0
+    passno: 0
+    state: present
+
+- name: update fstab entries for select rpool volumes
+  mount:
+    path: "{{ item }}"
+    src: "{{ zfsprep_root_pool}}{{ item }}"
+    fstype: zfs
+    opts: defaults
+    dump: 0
+    passno: 0
+    state: present
+  with_items:
+    - /tmp
+    - /var/log
+    - /var/spool
+    - /var/tmp
+
 - name: install locales
   locale_gen:
     name: "{{ item }}"
@@ -115,35 +140,20 @@
     name: root
     password: "{{ zfsprep_root_password_hash }}"
 
-- name: unmount boot efi partition
-  mount:
-    path: /boot/efi
-    state: unmounted
-
-- name: fix mount race condition
-  command: "zfs set mountpoint=legacy {{ item }}"
-  with_items:
-    - "{{ zfsprep_boot_pool }}/BOOT/ubuntu"
-    - "{{ zfsprep_root_pool }}/tmp"
-    - "{{ zfsprep_root_pool }}/var/log"
-    - "{{ zfsprep_root_pool }}/var/spool"
-    - "{{ zfsprep_root_pool }}/var/tmp"
+#- name: fix mount race condition
+#  command: "zfs set mountpoint=legacy {{ item }}"
+#  with_items:
+#    - "{{ zfsprep_boot_pool }}/BOOT/ubuntu"
+#    - "{{ zfsprep_root_pool }}/tmp"
+#    - "{{ zfsprep_root_pool }}/var/log"
+#    - "{{ zfsprep_root_pool }}/var/spool"
+#    - "{{ zfsprep_root_pool }}/var/tmp"
 
 #- name: update fstab entries for boot volume
 #  lineinfile:
 #    line: "{{ zfsprep_boot_pool}}/BOOT/ubuntu /boot zfs nodev,relatime,x-systemd.requires=zfs-import-bpool.service 0 0"
 #    path: /etc/fstab
 #    insertafter: EOF
-
-- name: update fstab entry for boot volume
-  mount:
-    path: /boot
-    src: "{{ zfsprep_boot_pool}}/BOOT/ubuntu"
-    fstype: zfs
-    opts: nodev,relatime,x-systemd.requires=zfs-import-bpool.service
-    dump: 0
-    passno: 0
-    state: present
 
 #- name: update fstab entries for select rpool volumes
 #  lineinfile:
@@ -155,21 +165,6 @@
 #    - /var/log
 #    - /var/spool
 #    - /var/tmp
-
-- name: update fstab entries for select rpool volumes
-  mount:
-    path: "{{ item }}"
-    src: "{{ zfsprep_root_pool}}{{ item }}"
-    fstype: zfs
-    opts: defaults
-    dump: 0
-    passno: 0
-    state: present
-  with_items:
-    - /tmp
-    - /var/log
-    - /var/spool
-    - /var/tmp
 
 - name: create swap zvol
   zfs:
@@ -236,6 +231,11 @@
   command: "grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ubuntu --recheck --no-floppy"
   when: zfsprep_efi|default(false)|bool == true
 
+- name: unmount boot efi partition
+  mount:
+    path: /boot/efi
+    state: unmounted
+
 - name: write grub boot sector
   command: "dd if={{ zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_efi_part_append) | list | first }} of={{ item }}"
   with_items:
@@ -248,6 +248,11 @@
     - "{{ (zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>') | list)[1:] }}"
     - "{{ zfsprep_root_disks[1:] }}"
   when: (zfsprep_efi|default(false)|bool == true) and (zfsprep_root_device_list | length > 1)
+
+- name: mount boot efi partition
+  mount:
+    path: /boot/efi
+    state: mounted
 
 - name: ensure zfs.target starts on boot
   systemd:
