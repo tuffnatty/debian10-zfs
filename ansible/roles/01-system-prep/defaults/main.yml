@@ -24,8 +24,8 @@ zfsprep_root_part_append: "{{ zfsprep_legacy_device_nodes | ternary('3', '-part3
 
 zfsprep_mbr_partition_flags: "-a1 -n2:34:2047 -t2:EF02"
 zfsprep_efi_partition_flags: "-n1:1M:+512M -t1:EF00"
-zfsprep_boot_partition_flags: "-n2:0:+1024M -t3:BF01"
-zfsprep_root_partition_flags: "-n3:0:0 -t2:BF01"
+zfsprep_boot_partition_flags: "-n2:0:+1024M -t2:BF01"
+zfsprep_root_partition_flags: "-n3:0:0 -t3:BF01"
 zfsprep_partition_flags: "{{ (zfsprep_efi | default(false) | bool | ternary(zfsprep_efi_partition_flags,zfsprep_mbr_partition_flags)) + ' ' + zfsprep_boot_partition_flags + ' ' + zfsprep_root_partition_flags}}"
 #a8 for 4k size
 zfsprep_root_pool_opts: "-o ashift=12 -O atime=off -O canmount=off -O compression=lz4 -O normalization=formD -O xattr=sa -O mountpoint=/ -R /mnt"
