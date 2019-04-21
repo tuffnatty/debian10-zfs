@@ -62,6 +62,11 @@
 - name: manually mount rpool/ROOT/ubuntu before creating other mountpoints
   command: "zfs mount {{ zfsprep_root_pool }}/ROOT/ubuntu"
 
+- name: create boot directory
+  file:
+    path: /mnt/boot
+    state: directory
+
 - name: manually mount bpool/ROOT/ubuntu before creating other mountpoints
   command: "mount -t zfs {{ zfsprep_boot_pool }}/BOOT/ubuntu /mnt/boot"
 
@@ -73,6 +78,16 @@
       "{{ item.properties }}"
   with_items:
     - "{{ zfsprep_root_volumes }}"
+
+- name: create mountpoints for rpool filesystems with legacy mountpoints
+  file:
+    path: "{{ item }}"
+    state: directory
+  with_items:
+    - /tmp
+    - /var/log
+    - /var/spool
+    - /var/tmp
 
 - name: mount rpool filesystems with legacy mountpoints
   command: "mount -t zfs {{ zfsprep_root_pool }}{{ item }} {{ item }}"
