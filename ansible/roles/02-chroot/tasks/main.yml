@@ -2,31 +2,6 @@
 - debug:
     var: zfsprep_efi|default(false)|bool == true
 
-- name: update fstab entry for boot volume
-  mount:
-    path: /boot
-    src: "{{ zfsprep_boot_pool}}/BOOT/ubuntu"
-    fstype: zfs
-    opts: nodev,relatime,x-systemd.requires=zfs-import-bpool.service
-    dump: 0
-    passno: 0
-    state: present
-
-- name: update fstab entries for select rpool volumes
-  mount:
-    path: "{{ item }}"
-    src: "{{ zfsprep_root_pool}}{{ item }}"
-    fstype: zfs
-    opts: defaults
-    dump: 0
-    passno: 0
-    state: present
-  with_items:
-    - /tmp
-    - /var/log
-    - /var/spool
-    - /var/tmp
-
 - name: install locales
   locale_gen:
     name: "{{ item }}"
@@ -109,6 +84,31 @@
     passno: 1
     state: mounted
   when: zfsprep_efi|default(false)|bool == true
+
+- name: update fstab entry for boot volume
+  mount:
+    path: /boot
+    src: "{{ zfsprep_boot_pool}}/BOOT/ubuntu"
+    fstype: zfs
+    opts: nodev,relatime,x-systemd.requires=zfs-import-bpool.service
+    dump: 0
+    passno: 0
+    state: present
+
+- name: update fstab entries for select rpool volumes
+  mount:
+    path: "{{ item }}"
+    src: "{{ zfsprep_root_pool}}{{ item }}"
+    fstype: zfs
+    opts: defaults
+    dump: 0
+    passno: 0
+    state: present
+  with_items:
+    - /tmp
+    - /var/log
+    - /var/spool
+    - /var/tmp
 
 - name: get backup efi partition uuid
   command: "blkid -s PARTUUID -o value {{ item }}"
