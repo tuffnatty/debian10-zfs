@@ -257,6 +257,17 @@
     name: zfs.target
     enabled: yes
 
+- name: install zfs-import-bpool.service
+  template:
+    src: zfs-import-bpool.j2
+    dest: /lib/systemd/system/zfs-import-bpool.service
+    mode: 0644
+
+- name: enable zfs-import-bpool service
+  systemd:
+    name: zfs-import-bpool.service
+    enabled: yes
+
 - name: install firstboot service
   template:
     src: firstboot.service.j2

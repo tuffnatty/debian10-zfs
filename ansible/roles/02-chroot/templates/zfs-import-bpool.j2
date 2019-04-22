@@ -1,0 +1,14 @@
+[Unit]
+DefaultDependencies=no
+Before=zfs-import-scan.service
+Before=zfs-import-cache.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/zpool import -N -o cachefile=none {{ zfsprep_boot_pool }}
+
+[Install]
+WantedBy=zfs-import.target
+
+# systemctl enable zfs-import-bpool.service
