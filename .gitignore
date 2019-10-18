@@ -2,3 +2,4 @@ builds
 packer_cache
 *.iso
 output*
+.DS_Store
