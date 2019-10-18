@@ -1,6 +1,11 @@
 # ubuntu-zfs
 Ansible playbook that implements https://github.com/zfsonlinux/zfs/wiki/Ubuntu-18.04-Root-on-ZFS
 
+This was forked from `https://github.com/dyindude/ubuntu-zfs` but the roles were
+cleaned up extensively to make better use of existing ansible modules.
+
+Not tested much, but might work. Would not use without proper adult supervision.
+
 ## Usage
 - Edit `ansible/vars.yml` with your desired settings.
 - Run `packer build -on-error=ask ubuntu-zfs-{{ mbr || efi }}.json` to test the playbook in a Virtualbox machine.
