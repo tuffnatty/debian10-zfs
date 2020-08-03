@@ -58,7 +58,7 @@
 - name: set up grub partitions for efi
   command: "mkdosfs -F32 -n EFI {{ item }}"
   with_items:
-    - "{{ zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_efi_part_append) | list  }}"
+    - "{{ zfsprep_root_device_list | map('regex_replace', '$', zfsprep_efi_part_append) | list  }}"
   when: zfsprep_efi|default(false)|bool == true
 
 - name: create efi mountpoint
@@ -71,7 +71,7 @@
   command: "blkid -s PARTUUID -o value {{ disk }}"
   register: efi_blkid
   vars:
-    disk: "{{ zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_efi_part_append) | list | first }}"
+    disk: "{{ zfsprep_root_device_list | map('regex_replace', '$', zfsprep_efi_part_append) | list | first }}"
   when: zfsprep_efi|default(false)|bool == true
 
 - name: update fstab with efi partition
@@ -114,7 +114,7 @@
   command: "blkid -s PARTUUID -o value {{ item }}"
   register: efi_backup_blkid
   with_items:
-    - "{{ (zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_efi_part_append) | list)[1:] }}"
+    - "{{ (zfsprep_root_device_list | map('regex_replace', '$', zfsprep_efi_part_append) | list)[1:] }}"
   when: zfsprep_efi|default(false)|bool == true
 
 - name: update fstab with backup efi partitions
@@ -237,15 +237,15 @@
     state: unmounted
 
 - name: write grub boot sector
-  command: "dd if={{ zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_efi_part_append) | list | first }} of={{ item }}"
+  command: "dd if={{ zfsprep_root_device_list | map('regex_replace', '$', zfsprep_efi_part_append) | list | first }} of={{ item }}"
   with_items:
-    - "{{ (zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_efi_part_append) | list)[1:] }}"
+    - "{{ (zfsprep_root_device_list | map('regex_replace', '$', zfsprep_efi_part_append) | list)[1:] }}"
   when: (zfsprep_efi|default(false)|bool == true) and (zfsprep_root_device_list | length > 1)
 
 - name: setup efi on secondary disks
-  command: "efibootmgr -c -g -d {{ item.0 }} -p 3 -L 'ubuntu-{{ item.1 }}' -l '\\EFI\\Ubuntu\\grubx64.efi'"
+  command: "efibootmgr -c -g -d {{ item.0 }} -p 4 -L 'ubuntu-{{ item.1 }}' -l '\\EFI\\Ubuntu\\grubx64.efi'"
   with_together:
-    - "{{ (zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>') | list)[1:] }}"
+    - "{{ zfsprep_root_device_list[1:] }}"
     - "{{ zfsprep_root_disks[1:] }}"
   when: (zfsprep_efi|default(false)|bool == true) and (zfsprep_root_device_list | length > 1)
 

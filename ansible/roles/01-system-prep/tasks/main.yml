@@ -22,10 +22,10 @@
     - "{{ zfsprep_root_device_list }}"
 
 - name: create boot zpool
-  command: "zpool create {{ zfsprep_boot_pool_opts }} {{ zfsprep_boot_pool }} {{ zfsprep_boot_pool_type }} {{ zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_boot_part_append) | list | join(' ') }}"
+  command: "zpool create {{ zfsprep_boot_pool_opts }} {{ zfsprep_boot_pool }} {{ zfsprep_boot_pool_type }} {{ zfsprep_root_device_list | map('regex_replace', '$', zfsprep_boot_part_append) | list | join(' ') }}"
 
 - name: create root zpool
-  command: "zpool create {{ zfsprep_root_pool_opts }} {{ zfsprep_root_pool }} {{ zfsprep_root_pool_type }} {{ zfsprep_root_device_list | map('regex_replace', '(.*)', '\\g<1>' + zfsprep_root_part_append) | list | join(' ') }}"
+  command: "zpool create {{ zfsprep_root_pool_opts }} {{ zfsprep_root_pool }} {{ zfsprep_root_pool_type }} {{ zfsprep_root_device_list | map('regex_replace', '$', zfsprep_root_part_append) | list | join(' ') }}"
 
 - name: create boot dataset
   zfs:
