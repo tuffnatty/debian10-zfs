@@ -3,6 +3,8 @@
     name: software-properties-common
     state: present
 - command: add-apt-repository universe
+  when: zfsprep_distribution == "ubuntu"
+
 - apt:
     name: "{{ item }}"
     state: present
