@@ -1,6 +1,6 @@
 ---
 - debug:
-    var: zfsprep_efi|default(false)|bool == true
+    var: zfsprep_efi|default(false, true)
 
 - name: install locales
   locale_gen:
@@ -47,7 +47,7 @@
   apt:
     name: grub-pc
     state: present
-  when: zfsprep_efi|default(false)|bool != true
+  when: not zfsprep_efi | default(false, true)
 
 - name: install dosfstools
   apt:
@@ -110,7 +110,7 @@
   register: efi_backup_blkid
   with_items:
     - "{{ (zfsprep_root_device_list | map('regex_replace', '$', zfsprep_efi_part_append) | list)[1:] }}"
-  when: zfsprep_efi|default(false)|bool == true
+  when: zfsprep_efi | default(false, true)
 
 - name: update fstab with backup efi partitions
   mount:
@@ -121,14 +121,14 @@
     dump: 0
     passno: 1
     state: present
-  when: zfsprep_efi|default(false)|bool == true
+  when: zfsprep_efi | default(false, true)
   loop: "{{ efi_backup_blkid.results }}"
 
 - name: install grub-efi-amd64
   apt:
     name: grub-efi-amd64
     state: present
-  when: zfsprep_efi|default(false)|bool == true
+  when: zfsprep_efi | default(false, true)
 
 - name: set root password
   user:
@@ -170,7 +170,7 @@
 
 - name: mkswap
   command: "mkswap -f /dev/zvol/{{ zfsprep_root_pool }}/swap"
-  when: zfsprep_swap|default(false)|bool == true
+  when: zfsprep_swap | default(false, true)
 
 - name: write swap entry in fstab
   mount:
@@ -182,18 +182,18 @@
     passno: 0
     dump: 0
     state: present
-  when: zfsprep_swap|default(false)|bool == true
+  when: zfsprep_swap | default(false, true)
 
 - name: swapon
   command: swapon -av
-  when: zfsprep_swap|default(false)|bool == true
+  when: zfsprep_swap | default(false, true)
 
 - lineinfile:
     line: "RESUME=none"
     path: /etc/initramfs-tools/conf.d/resume
     create: yes
     state: present
-  when: zfsprep_swap|default(false)|bool == true
+  when: zfsprep_swap | default(false, true)
 
 - name: update initramfs
   command: "update-initramfs -u -k all"
@@ -220,11 +220,11 @@
   command: "grub-install {{ item }}"
   with_items:
     - "{{ zfsprep_root_device_list }}"
-  when: zfsprep_efi|default(false)|bool != true
+  when: not zfsprep_efi | default(false, true)
 
 - name: install grub efi on primary disk
   command: "grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ubuntu --recheck --no-floppy"
-  when: zfsprep_efi|default(false)|bool == true
+  when: zfsprep_efi | default(false, true)
 
 - name: unmount boot efi partition
   mount:
@@ -235,14 +235,14 @@
   command: "dd if={{ zfsprep_root_device_list | map('regex_replace', '$', zfsprep_efi_part_append) | list | first }} of={{ item }}"
   with_items:
     - "{{ (zfsprep_root_device_list | map('regex_replace', '$', zfsprep_efi_part_append) | list)[1:] }}"
-  when: (zfsprep_efi|default(false)|bool == true) and (zfsprep_root_device_list | length > 1)
+  when: (zfsprep_efi | default(false, true)) and (zfsprep_root_device_list | length > 1)
 
 - name: setup efi on secondary disks
   command: "efibootmgr -c -g -d {{ item.0 }} -p 4 -L 'ubuntu-{{ item.1 }}' -l '\\EFI\\Ubuntu\\grubx64.efi'"
   with_together:
     - "{{ zfsprep_root_device_list[1:] }}"
     - "{{ zfsprep_root_disks[1:] }}"
-  when: (zfsprep_efi|default(false)|bool == true) and (zfsprep_root_device_list | length > 1)
+  when: (zfsprep_efi|default(false, true)) and (zfsprep_root_device_list | length > 1)
 
 - name: mount boot efi partition
   command: mount /boot/efi
