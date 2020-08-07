@@ -8,13 +8,13 @@
   command: "mdadm --zero-superblock --force {{ item }}"
   with_items:
     - "{{ zfsprep_target_disks }}"
-  when: zfsprep_zap_disks | default(false) | bool == true
+  when: zfsprep_zap_disks | default(false, true)
 
 - name: clear gpt tables
   command: "sgdisk --zap-all {{ item }}"
   with_items:
     - "{{ zfsprep_target_disks }}"
-  when: zfsprep_zap_disks | default(false) | bool == true
+  when: zfsprep_zap_disks | default(false, true)
 
 - name: set up root disk partitions
   command: "sgdisk {{ zfsprep_partition_flags }} {{ item }}"
