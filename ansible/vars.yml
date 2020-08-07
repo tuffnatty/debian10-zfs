@@ -12,3 +12,8 @@ zfsprep_boot_pool_type: "mirror"
 zfsprep_root_pool_type: "mirror"
 zfsprep_legacy_device_nodes: false
 zfsprep_timezone: "America/Detroit"
+zfsprep_distribution: "debian"
+zfsprep_ubuntu_release: "buster"
+zfsprep_backports_kernel: true
+zfsprep_backports_zfs: true
+zfsprep_kernel_package_postfix: "-5.4.0-0.bpo.4-amd64"  # stable 4.19 is broken wrt Ryzen+EDAC, 5.6 broken wrt zfs, need to stay on 5.4

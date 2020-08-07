@@ -2,6 +2,35 @@
 - debug:
     var: zfsprep_efi|default(false, true)
 
+- name: networking | disable predictable network interface names
+  replace:
+    path: /etc/network/interfaces
+    regexp: "en\\w+"
+    replace: "eth0"
+  when: zfsprep_disable_predictable | default(true, true)
+
+- name: ln -s /proc/self/mounts /etc/mtab
+  file:
+    src: /proc/self/mounts
+    dest: /etc/mtab
+    state: link
+
+- name: pin ZFS packages to backports repo
+  template:
+    src: 90_zfs.j2
+    dest: /etc/apt/preferences.d/90_zfs
+    mode: 0644
+  when: zfsprep_backports_zfs | default(false, true)
+
+- name: update apt cache
+  apt:
+    update_cache: yes
+
+- name: apt install locales
+  apt:
+    name: 'locales'
+    state: present
+
 - name: install locales
   locale_gen:
     name: "{{ item }}"
@@ -22,26 +51,44 @@
 - name: reconfigure tzdata package
   command: dpkg-reconfigure -f noninteractive tzdata
 
-- name: ln -s /proc/self/mounts /etc/mtab
-  file:
-    src: /proc/self/mounts
-    dest: /etc/mtab
-    state: link
-
-- name: update apt cache
-  apt:
-    update_cache: yes
-
 - name: install our kernel
   apt:
-    name: "{{ zfsprep_kernel_package }}"
+    name: "{{ zfsprep_kernel_package }}{{ zfsprep_kernel_package_postfix }}"
     install_recommends: no
     state: present
+  when: not zfsprep_backports_kernel | default(false, true)
+
+- name: install our kernel from backports
+  apt:
+    name: "{{ zfsprep_kernel_package }}{{ zfsprep_kernel_package_postfix }}"
+    install_recommends: no
+    state: latest
+    default_release: "{{ zfsprep_ubuntu_release }}-backports"
+  when: zfsprep_backports_kernel | default(false, true)
+
+- name: install dev packages from backports
+  apt:
+    name: ['dpkg-dev', 'linux-headers{{ zfsprep_kernel_package_postfix }}']
+    state: latest
+    default_release: "{{ zfsprep_ubuntu_release }}-backports"
+  when: zfsprep_distribution == "debian" and zfsprep_backports_kernel | default(false, true)
+
+- name: install dev packages
+  apt:
+    name: ['dpkg-dev', 'linux-headers{{ zfsprep_kernel_package_postfix }}']
+    state: present
+  when: zfsprep_distribution == "debian" and not zfsprep_backports_kernel | default(false, true)
 
 - name: install zfs-initramfs
   apt:
     name: zfs-initramfs
     state: present
+
+- name: prepare ZFS DKMS build
+  copy:
+    dest: /etc/dkms/zfs.conf
+    content: "REMAKE_INITRD=yes"
+  when: zfsprep_distribution == "debian"
 
 - name: install grub-pc
   apt:
@@ -83,12 +130,13 @@
 - name: update fstab entry for boot volume
   mount:
     path: /boot
-    src: "{{ zfsprep_boot_pool}}/BOOT/ubuntu"
+    src: "{{ zfsprep_boot_pool}}/BOOT/{{ zfsprep_distribution }}"
     fstype: zfs
     opts: nodev,relatime,x-systemd.requires=zfs-import-bpool.service
     dump: 0
     passno: 0
     state: present
+  when: zfsprep_ubuntu_release == "bionic"
 
 - name: update fstab entries for select rpool volumes
   mount:
@@ -104,6 +152,7 @@
     - /var/log
     - /var/spool
     - /var/tmp
+  when: zfsprep_ubuntu_release == "bionic"
 
 - name: get backup efi partition uuid
   command: "blkid -s PARTUUID -o value {{ item }}"
@@ -135,31 +184,16 @@
     name: root
     password: "{{ zfsprep_root_password_hash }}"
 
-#- name: fix mount race condition
-#  command: "zfs set mountpoint=legacy {{ item }}"
-#  with_items:
-#    - "{{ zfsprep_boot_pool }}/BOOT/ubuntu"
-#    - "{{ zfsprep_root_pool }}/tmp"
-#    - "{{ zfsprep_root_pool }}/var/log"
-#    - "{{ zfsprep_root_pool }}/var/spool"
-#    - "{{ zfsprep_root_pool }}/var/tmp"
+- name: install zfs-import-bpool.service
+  template:
+    src: zfs-import-bpool.j2
+    dest: /lib/systemd/system/zfs-import-bpool.service
+    mode: 0644
 
-#- name: update fstab entries for boot volume
-#  lineinfile:
-#    line: "{{ zfsprep_boot_pool}}/BOOT/ubuntu /boot zfs nodev,relatime,x-systemd.requires=zfs-import-bpool.service 0 0"
-#    path: /etc/fstab
-#    insertafter: EOF
-
-#- name: update fstab entries for select rpool volumes
-#  lineinfile:
-#    line: "{{ zfsprep_root_pool}}{{ item }} {{ item }} zfs defaults 0 0"
-#    path: /etc/fstab
-#    insertafter: EOF
-#  with_items:
-#    - /tmp
-#    - /var/log
-#    - /var/spool
-#    - /var/tmp
+- name: enable zfs-import-bpool service
+  systemd:
+    name: zfs-import-bpool.service
+    enabled: yes
 
 - name: create swap zvol
   zfs:
@@ -167,6 +201,7 @@
     state: present
     extra_zfs_properties:
       "{{ zfsprep_swap_opts }}"
+  when: zfsprep_swap | default(false, true)
 
 - name: mkswap
   command: "mkswap -f /dev/zvol/{{ zfsprep_root_pool }}/swap"
@@ -195,6 +230,14 @@
     state: present
   when: zfsprep_swap | default(false, true)
 
+- name: Verify that the ZFS boot filesystem is recognized
+  command: grub-probe /boot
+  register: _grub_probe
+
+- fail:
+    msg: "grub_probe /boot: '{{ _grub_probe.stdout }}', should be zfs"
+  when: _grub_probe.stdout != "zfs"
+
 - name: update initramfs
   command: "update-initramfs -u -k all"
 
@@ -209,7 +252,7 @@
     - regex: "^GRUB_CMDLINE_LINUX_DEFAULT=.*"
       replace: 'GRUB_CMDLINE_LINUX_DEFAULT=""'
     - regex: "^GRUB_CMDLINE_LINUX=.*"
-      replace: 'GRUB_CMDLINE_LINUX="{{ zfsprep_grub_cmdline }}"'
+      replace: 'GRUB_CMDLINE_LINUX="{{ zfsprep_grub_cmdline_add }}{{ zfsprep_grub_cmdline }}"'
     - regex: "^#(GRUB_TERMINAL.*)"
       replace: "\\1"
 
@@ -223,7 +266,7 @@
   when: not zfsprep_efi | default(false, true)
 
 - name: install grub efi on primary disk
-  command: "grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ubuntu --recheck --no-floppy"
+  command: "grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id={{ zfsprep_distribution }} --recheck --no-floppy"
   when: zfsprep_efi | default(false, true)
 
 - name: unmount boot efi partition
@@ -238,7 +281,7 @@
   when: (zfsprep_efi | default(false, true)) and (zfsprep_root_device_list | length > 1)
 
 - name: setup efi on secondary disks
-  command: "efibootmgr -c -g -d {{ item.0 }} -p 4 -L 'ubuntu-{{ item.1 }}' -l '\\EFI\\Ubuntu\\grubx64.efi'"
+  command: "efibootmgr -c -g -d {{ item.0 }} -p 4 -L '{{ zfsprep_distribution }}-{{ item.1 }}' -l '\\EFI\\{{ zfsprep_distribution|capitalize }}\\grubx64.efi'"
   with_together:
     - "{{ zfsprep_root_device_list[1:] }}"
     - "{{ zfsprep_root_disks[1:] }}"
@@ -252,34 +295,64 @@
     name: zfs.target
     enabled: yes
 
-- name: install zfs-import-bpool.service
-  template:
-    src: zfs-import-bpool.j2
-    dest: /lib/systemd/system/zfs-import-bpool.service
-    mode: 0644
+- name: Fix filesystem mount ordering
+  shell:
+    cmd: |
+      fix_mount_order() {
+        local _cache="/etc/zfs/zfs_list.cache" _bpool="{{ zfsprep_boot_pool }}" _rpool="{{ zfsprep_root_pool }}"
+        mkdir $_cache && touch $_cache/$_bpool $_cache/$_rpool
+        ln -s /usr/lib/zfs-linux/zed.d/history_event-zfs-list-cacher.sh /etc/zfs/zed.d
+        _finally() { kill -9 $!; }; trap _finally EXIT
+        zed -F &
+        for n_try in $(seq 2); do
+          [ -s $_cache/$_bpool -a -s $_cache/$_rpool ] && break
+          # force cache update
+          zfs set canmount=on     $_bpool/BOOT/{{ zfsprep_distribution }}
+          zfs set canmount=noauto $_rpool/ROOT/{{ zfsprep_distribution }}
+        done
+        _finally && trap EXIT
+        sed -Ei "s|/mnt/?|/|" $_cache/*
+      }
+      fix_mount_order
+    warn: false
 
-- name: enable zfs-import-bpool service
-  systemd:
-    name: zfs-import-bpool.service
-    enabled: yes
+- name: install openssh
+  apt:
+    name: openssh-server
+    state: present
+
+- name: permit root login
+  lineinfile: dest=/etc/ssh/sshd_config regexp='^#* *PermitRootLogin' line='PermitRootLogin yes'
 
 - name: install firstboot service
   template:
     src: firstboot.service.j2
     dest: /lib/systemd/system/firstboot.service
+  when: zfsprep_distribution == "ubuntu"
 
 - name: install firstboot script
   template:
     src: firstboot.j2
     dest: /opt/firstboot
     mode: 0777
+  when: zfsprep_distribution == "ubuntu"
 
 - name: enable firstboot service
   systemd:
     name: firstboot.service
     enabled: yes
+  when: zfsprep_distribution == "ubuntu"
 
 - name: enable systemd-networkd service
   systemd:
     name: systemd-networkd
     enabled: yes
+  when: zfsprep_distribution == "ubuntu"
+
+- name: create initial snapshots
+  zfs:
+    name: "{{ item }}/{{ zfsprep_distribution }}@install"
+    state: present
+  with_items:
+    - "{{ zfsprep_boot_pool }}/BOOT"
+    - "{{ zfsprep_root_pool }}/ROOT"

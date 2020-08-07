@@ -1,8 +1,40 @@
 ---
+- name: update apt cache
+  apt:
+    update_cache: yes
+
 - name: ensure live system has necessary packages installed
   apt:
-    name: ['mdadm','debootstrap','gdisk','zfs-initramfs']
+    name: ['mdadm','debootstrap','gdisk']
     state: present
+
+- name: ensure live system has necessary packages installed
+  apt:
+    name: ['zfs-initramfs']
+    state: present
+  when: not zfsprep_backports_zfs | default(false, true)
+
+- name: ensure live system has necessary packages installed from backports
+  apt:
+    name: ['zfsutils-linux', 'zfs-initramfs', 'zfs-dkms', 'spl-dkms']
+    default_release: "{{ zfsprep_ubuntu_release }}-backports"
+    state: latest
+  when: zfsprep_backports_zfs | default(false, true)
+
+- name: unmount pseudo filesystems in zfs mountpoint
+  shell: "mount | awk '$3 ~ /^\\/mnt\\// { print $3 }' | sort -r | xargs -r umount"
+
+- name: export old zfs pools
+  command: "zpool export -f {{ item }}"
+  ignore_errors: yes
+  with_items: "{{ [zfsprep_boot_pool, zfsprep_root_pool] }}"
+
+- name: clear zpool labels
+  command: "zpool labelclear -f {{ item }}"
+  ignore_errors: yes
+  with_items: "{{ zfsprep_root_device_list | map('regex_replace', '$', zfsprep_boot_part_append)|list +
+                  zfsprep_root_device_list | map('regex_replace', '$', zfsprep_root_part_append)|list }}"
+  when: zfsprep_zap_disks | default(false, true)
 
 - name: clear superblocks
   command: "mdadm --zero-superblock --force {{ item }}"
@@ -21,54 +53,59 @@
   with_items:
     - "{{ zfsprep_root_device_list }}"
 
+- name: stop zed
+  systemd:
+    name: zfs-zed.service
+    state: stopped
+
+- name: unload ZFS module
+  modprobe:
+    name: zfs
+    state: absent
+
+- name: load ZFS module
+  modprobe:
+    name: zfs
+    state: present
+
 - name: create boot zpool
   command: "zpool create {{ zfsprep_boot_pool_opts }} {{ zfsprep_boot_pool }} {{ zfsprep_boot_pool_type }} {{ zfsprep_root_device_list | map('regex_replace', '$', zfsprep_boot_part_append) | list | join(' ') }}"
 
 - name: create root zpool
   command: "zpool create {{ zfsprep_root_pool_opts }} {{ zfsprep_root_pool }} {{ zfsprep_root_pool_type }} {{ zfsprep_root_device_list | map('regex_replace', '$', zfsprep_root_part_append) | list | join(' ') }}"
 
-- name: create boot dataset
+- name: create boot/root datasets
   zfs:
-    name: "{{ zfsprep_boot_pool }}/BOOT"
+    name: "{{ item }}"
     state: present
     extra_zfs_properties:
       canmount: off
       mountpoint: none
-
-- name: create root dataset
-  zfs:
-    name: "{{ zfsprep_root_pool }}/ROOT"
-    state: present
-    extra_zfs_properties:
-      canmount: off
-      mountpoint: none
-
-- name: create boot filesystem
-  zfs:
-    name: "{{ zfsprep_boot_pool }}/BOOT/ubuntu"
-    state: present
-    extra_zfs_properties:
-      canmount: noauto
-      mountpoint: legacy
+  with_items:
+    - "{{ zfsprep_boot_pool }}/BOOT"
+    - "{{ zfsprep_root_pool }}/ROOT"
 
 - name: create root filesystem
   zfs:
-    name: "{{ zfsprep_root_pool }}/ROOT/ubuntu"
+    name: "{{ zfsprep_root_pool }}/ROOT/{{ zfsprep_distribution }}"
     state: present
     extra_zfs_properties:
       canmount: noauto
       mountpoint: /
 
-- name: manually mount rpool/ROOT/ubuntu before creating other mountpoints
-  command: "zfs mount {{ zfsprep_root_pool }}/ROOT/ubuntu"
+- name: manually mount rpool/ROOT/{{ zfsprep_distribution }} before creating other mountpoints
+  command: "zfs mount {{ zfsprep_root_pool }}/ROOT/{{ zfsprep_distribution }}"
 
-- name: create boot directory
-  file:
-    path: /mnt/boot
-    state: directory
+- name: create boot filesystem
+  zfs:
+    name: "{{ zfsprep_boot_pool }}/BOOT/{{ zfsprep_distribution }}"
+    state: present
+    extra_zfs_properties:
+      canmount: noauto
+      mountpoint: /boot
 
-- name: manually mount bpool/ROOT/ubuntu before creating other mountpoints
-  command: "mount -t zfs {{ zfsprep_boot_pool }}/BOOT/ubuntu /mnt/boot"
+- name: manually mount bpool/BOOT/{{ zfsprep_distribution }} before creating other mountpoints
+  command: "zfs mount {{ zfsprep_boot_pool }}/BOOT/{{ zfsprep_distribution }}"
 
 - name: create rpool child filesystems
   zfs:
@@ -78,25 +115,6 @@
       "{{ item.properties }}"
   with_items:
     - "{{ zfsprep_root_volumes }}"
-
-- name: create mountpoints for rpool filesystems with legacy mountpoints
-  file:
-    path: "/mnt{{ item }}"
-    state: directory
-  with_items:
-    - /tmp
-    - /var
-    - /var/log
-    - /var/spool
-    - /var/tmp
-
-- name: mount rpool filesystems with legacy mountpoints
-  command: "mount -t zfs {{ zfsprep_root_pool }}{{ item }} /mnt{{ item }}"
-  with_items:
-    - /tmp
-    - /var/log
-    - /var/spool
-    - /var/tmp
 
 - name: chmod 01777 /mnt/var/tmp
   file:
@@ -113,16 +131,41 @@
 
 - name: run zfs set devices=off for root pool
   command: "zfs set devices=off {{ zfsprep_root_pool }}"
+  when: zfsprep_ubuntu_release == "bionic"
+
+- name: copy hostid to chroot so that zpools get imported on reboot
+  copy:
+    src: /etc/hostid
+    dest: /mnt/etc/hostid
 
 - name: write /etc/hostname in chroot
   copy:
     content: "{{ zfsprep_hostname.short }}"
     dest: /mnt/etc/hostname
 
-- name: write default network config in chroot
+- block:
+  - name: predict "predictable" interface name
+    shell:
+      udevadm test-builtin net_id /sys/class/net/{{ ansible_default_ipv4.interface }} 2>/dev/null \
+        | sed 's/FROM_DATABASE/1/; s/ONBOARD/2/; s/SLOT/3/; s/PATH/4/; s/MAC/5/' \
+        | sort | awk -F= '/^ID_NET_NAME/ { print $2; exit }'
+    register: _tmp
+
+  - set_fact:
+      zfsprep_net_predictable: "{{ _tmp.stdout }}"
+      _tmp: None
+
+- name: write default netplan config in chroot
   template:
     src: network.j2
     dest: "/mnt/etc/systemd/network/{{ zfsprep_netplan_interface }}.network"
+  when: zfsprep_netplan | default(false, true)
+
+- name: write default network config in chroot
+  template:
+    src: interfaces.j2
+    dest: "/mnt/etc/network/interfaces"
+  when: not zfsprep_netplan | default(false, true)
 
 - name: write /etc/apt/sources.list in chroot
   template:
@@ -144,3 +187,15 @@
     - /sys /mnt/sys
   args:
     warn: false
+
+- name: mkdir /mnt/root/.ssh
+  file:
+    path: /mnt/root/.ssh
+    state: directory
+    mode: 0700
+
+- name: copy keys to chroot
+  copy:
+    src: /root/.ssh/authorized_keys
+    dest: /mnt/root/.ssh/authorized_keys
+    mode: 0600
