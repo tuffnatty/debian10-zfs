@@ -53,37 +53,32 @@
   apt:
     name: dosfstools
     state: present
-  when: zfsprep_efi|default(false)|bool == true
 
 - name: set up grub partitions for efi
   command: "mkdosfs -F32 -n EFI {{ item }}"
   with_items:
     - "{{ zfsprep_root_device_list | map('regex_replace', '$', zfsprep_efi_part_append) | list  }}"
-  when: zfsprep_efi|default(false)|bool == true
 
 - name: create efi mountpoint
   file:
     path: /boot/efi
     state: directory
-  when: zfsprep_efi|default(false)|bool == true
 
 - name: get efi partition uuid
   command: "blkid -s PARTUUID -o value {{ disk }}"
   register: efi_blkid
   vars:
     disk: "{{ zfsprep_root_device_list | map('regex_replace', '$', zfsprep_efi_part_append) | list | first }}"
-  when: zfsprep_efi|default(false)|bool == true
 
 - name: update fstab with efi partition
   mount:
-    path: /boot/efi 
+    path: /boot/efi
     src: PARTUUID={{ efi_blkid.stdout }}
     fstype: vfat
     opts: nofail,x-systemd.device-timeout=1
     dump: 0
     passno: 1
     state: mounted
-  when: zfsprep_efi|default(false)|bool == true
 
 - name: update fstab entry for boot volume
   mount:
