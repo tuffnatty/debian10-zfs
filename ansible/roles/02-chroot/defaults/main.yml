@@ -1,7 +1,7 @@
 ---
 # defaults file for 02-chroot
 zfsprep_efi: true
-zfsprep_swap: true
+zfsprep_swap: false
 zfsprep_swap_opts:
   volsize: 4G
   compression: zle
