@@ -20,9 +20,9 @@ zfsprep_root_disks:
 zfsprep_root_disks_by_id: "{{ zfsprep_root_disks | map('extract', hostvars[inventory_hostname]['ansible_devices'], ['links', 'ids', 0]) | list | map('regex_replace', '^', '/dev/disk/by-id/') | list }}"
 zfsprep_root_device_list: "{{ zfsprep_legacy_device_nodes | ternary((zfsprep_root_disks | map('regex_replace', '^', '/dev/') | list), zfsprep_root_disks_by_id) }}"
 zfsprep_nvme_p: "{{ zfsprep_root_disks[0].startswith('nvme') | ternary('p', '') }}"
-zfsprep_efi_part_append: "{{ zfsprep_legacy_device_nodes | ternary(zfsprep_name_p + '2', '-part2') }}"
-zfsprep_boot_part_append: "{{ zfsprep_legacy_device_nodes | ternary(zfsprep_name_p + '3', '-part3') }}"
-zfsprep_root_part_append: "{{ zfsprep_legacy_device_nodes | ternary(zfsprep_name_p + '4', '-part4') }}"
+zfsprep_efi_part_append: "{{ zfsprep_legacy_device_nodes | ternary(zfsprep_nvme_p + '2', '-part2') }}"
+zfsprep_boot_part_append: "{{ zfsprep_legacy_device_nodes | ternary(zfsprep_nvme_p + '3', '-part3') }}"
+zfsprep_root_part_append: "{{ zfsprep_legacy_device_nodes | ternary(zfsprep_nvme_p + '4', '-part4') }}"
 
 zfsprep_mbr_partition_flags: "-a1 -n1:24K:+1000K -t1:EF02"
 zfsprep_efi_partition_flags: "-n2:1M:+512M -t2:EF00"
